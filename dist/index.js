@@ -48100,6 +48100,22 @@ const {
   CI
 } = process.env;
 const logLevel = CI ? src/* LogLevel.INFO */["in"].INFO : src/* LogLevel.DEBUG */["in"].DEBUG;
+async function getExistingPages(items) {
+  const notion = new src/* Client */.KU({
+    auth: NOTION_API_TOKEN,
+    logLevel
+  });
+  const response = await notion.databases.query({
+    database_id: NOTION_READER_DATABASE_ID,
+    or: items.map(item => ({
+      property: 'Link',
+      text: {
+        equals: item.link
+      }
+    }))
+  });
+  return response.results;
+}
 async function getFeedUrlsFromNotion() {
   const notion = new src/* Client */.KU({
     auth: NOTION_API_TOKEN,
@@ -49239,15 +49255,21 @@ function htmlToNotionBlocks(htmlContent) {
 
 async function index() {
   const feedItems = await getNewFeedItems();
+  const existingPages = await getExistingPages(feedItems);
 
   for (let i = 0; i < feedItems.length; i++) {
     const item = feedItems[i];
+    const existingEntries = existingPages.find(page => page.properties.Link.url === item.link);
+    const isNewEntry = existingEntries === undefined;
     const notionItem = {
       title: item.title,
       link: item.link,
       content: htmlToNotionBlocks(item.content)
     };
-    await addFeedItemToNotion(notionItem);
+
+    if (isNewEntry) {
+      await addFeedItemToNotion(notionItem);
+    }
   }
 
   await deleteOldUnreadFeedItemsFromNotion();
